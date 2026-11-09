@@ -1,0 +1,12 @@
+# 用客户已有的 MySQL（不启动自带的 mysql 容器）：
+#   docker compose -f compose.yaml -f deploy/docker/compose.external-db.yaml up -d
+# .env 里把 DB_HOST / DB_PORT / DB_USER / DB_PASSWORD 指向那个库；
+# DB_ADMIN_USER / DB_ADMIN_PASSWORD 填一个能建只读账号的账号（不填则 AI 问数不能写 SQL）。
+services:
+  mysql:
+    profiles: ["bundled-db"]
+  app:
+    depends_on: !reset []
+    environment:
+      DB_ADMIN_USER: ${DB_ADMIN_USER:-${DB_USER}}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:-${DB_PASSWORD}}

@@ -1,0 +1,513 @@
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #f5f6f8;
+}
+
+.page {
+  padding: 20px 24px;
+}
+
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.page-title h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.col-title {
+  line-height: 1.2;
+}
+
+.col-title small {
+  display: block;
+  color: #999;
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.sql-source {
+  max-height: 420px;
+  overflow: auto;
+  background: #fafafa;
+  padding: 12px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* ---- app shell ---- */
+.app-header {
+  background: #fff;
+  padding: 0 24px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Phones: menu button · page name · account button, stuck to the top. */
+.app-header.app-header-narrow {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 52px;
+  line-height: 52px;
+  padding: 0 4px;
+  gap: 4px;
+}
+
+.app-header-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Report filters: label + control pairs that wrap; on phones each pair takes a full row. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding: 12px;
+  }
+
+  .page-title {
+    gap: 4px 12px;
+    margin-bottom: 12px;
+  }
+
+  .page-title h2 {
+    font-size: 18px;
+  }
+
+  .filter-bar > .filter-item {
+    display: flex;
+    width: 100%;
+  }
+
+  .filter-bar > .filter-item > .ant-space-item:first-child {
+    flex: none;
+    width: 4.5em;
+  }
+
+  .filter-bar > .filter-item > .ant-space-item:last-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .filter-bar > .filter-item .ant-select {
+    width: 100% !important;
+  }
+
+  /* Card headers: buttons in `extra` move under the title instead of overlapping it. */
+  .ant-card .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .ant-card .ant-card-head {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .ant-card .ant-card-head-title {
+    flex: 1 0 auto;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .ant-card .ant-card-extra {
+    margin-inline-start: auto;
+    max-width: 100%;
+  }
+
+  .ant-card.ant-card-small > .ant-card-body {
+    padding: 10px;
+  }
+}
+
+.attain-ok {
+  color: #389e0d;
+  font-weight: 600;
+}
+
+.attain-bad {
+  color: #cf1322;
+  font-weight: 600;
+}
+
+.kpi-card .ant-statistic-title {
+  margin-bottom: 2px;
+}
+
+.kpi-card .ant-statistic-content {
+  font-size: clamp(15px, 3.6vw, 20px);
+  overflow-wrap: anywhere;
+}
+
+/* Report headers: wrap onto at most two lines; column widths are fitted so two lines always suffice. */
+.report-table .ant-table-thead > tr > th {
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.th-2line {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.empty-cell {
+  color: #bfbfbf;
+}
+
+/* NULL in raw data views (table browse, import preview, SQL console) */
+.null-cell {
+  color: #d46b08;
+  background: #fff7e6;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* Pivot tables: merged group cells are centred vertically; 小计 rows stand out from member rows. */
+.report-table td.merged-cell {
+  vertical-align: middle;
+}
+
+.report-table .subtotal-row > td {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* Rows a report emphasizes (package tables[].highlight, e.g. 我方, the client): beats antd's row hover.
+   Merged cells span other rows too, so they keep the plain background. */
+.ant-table-wrapper.report-table .ant-table-tbody > tr.ant-table-row.highlight-row > td:not(.merged-cell) {
+  background: #e6f4ff;
+  font-weight: 600;
+}
+
+.ant-table-wrapper.report-table .ant-table-tbody > tr.ant-table-row.highlight-row:hover > td:not(.merged-cell) {
+  background: #d4eaff;
+}
+
+/* Table browse: titles wrap onto at most two lines (column widths are fitted for that, see TableBrowse). */
+.browse-table .ant-table-thead > tr > th {
+  white-space: normal;
+  vertical-align: middle;
+}
+
+/* ---- AI 问数 launcher ---- */
+.chat-launcher {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 22px 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f6bff 0%, #7b4dff 55%, #c04dff 100%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(110, 77, 255, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Soft glow that breathes behind the button. */
+.chat-launcher::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(10px);
+  opacity: 0.45;
+  z-index: -1;
+  animation: chat-launcher-glow 2.8s ease-in-out infinite;
+}
+
+.chat-launcher:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(110, 77, 255, 0.5);
+}
+
+.chat-launcher:active {
+  transform: scale(0.97);
+}
+
+.chat-launcher:focus-visible {
+  outline: 3px solid #b8a6ff;
+  outline-offset: 2px;
+}
+
+.chat-launcher-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 28px;
+}
+
+.chat-launcher-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chat-launcher-twinkle 2.4s ease-in-out infinite;
+}
+
+.chat-launcher-spark-2 {
+  animation-delay: 1.2s;
+}
+
+@keyframes chat-launcher-glow {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes chat-launcher-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.6);
+  }
+}
+
+/* Phones: a bit smaller, and clear of the home indicator. */
+@media (max-width: 767px) {
+  .chat-launcher {
+    right: 12px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    height: 48px;
+    padding: 0 18px 0 8px;
+    font-size: 15px;
+  }
+
+  .chat-launcher-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 25px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-launcher::before,
+  .chat-launcher-spark {
+    animation: none;
+  }
+}
+
+/* ---- AI 问数 drawer ---- */
+.chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 8px;
+}
+
+.chat-empty {
+  padding: 8px 0;
+}
+
+.chat-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 12px 0 8px;
+}
+
+.chat-user-bubble {
+  max-width: 85%;
+  background: #1677ff;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px 10px 2px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-user-context {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+  max-width: 85%;
+  text-align: right;
+}
+
+/* 问数记录: one question of a conversation; the one clicked in the list is marked */
+.chat-log-turn {
+  padding: 8px 0 4px;
+  border-bottom: 1px dashed #f0f0f0;
+  scroll-margin-top: 8px;
+}
+
+.chat-log-current {
+  border-left: 3px solid #1677ff;
+  padding-left: 10px;
+  margin-left: -13px;
+}
+
+.chat-assistant {
+  margin: 8px 0 16px;
+}
+
+.chat-md {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.chat-md p {
+  margin: 0 0 8px;
+}
+
+.chat-md ul,
+.chat-md ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.chat-md table {
+  border-collapse: collapse;
+  margin: 4px 0 10px;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+
+.chat-md th,
+.chat-md td {
+  border: 1px solid #f0f0f0;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.chat-md th {
+  background: #fafafa;
+}
+
+.chat-md code {
+  background: #f5f5f5;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.chat-tool,
+.chat-confirm {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  background: #fcfcfc;
+}
+
+.chat-confirm {
+  border-color: #ffd591;
+  background: #fffbe6;
+}
+
+.chat-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-tool-title {
+  font-weight: 500;
+}
+
+.chat-tool-body {
+  margin-top: 8px;
+}
+
+.chat-sql {
+  background: #f5f5f5;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.chat-input {
+  border-top: 1px solid #f0f0f0;
+  padding: 10px 16px 14px;
+  background: #fff;
+}
+
+.chat-context {
+  margin-bottom: 8px;
+}
+
+.chat-chart {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px 4px;
+  margin: 8px 0;
+  background: #fff;
+}
+
+.chat-chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+/* iOS Safari zooms into any focused field under 16px; only phones running iOS get the larger text. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    input,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}

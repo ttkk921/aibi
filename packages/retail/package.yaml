@@ -1,0 +1,275 @@
+# 业务包：门店销售看板（虚构示例）
+#
+# 平台代码不含任何业务；这里声明品牌、数据表（导入规则）、汇总表、列格式、报表、AI 问数示例。
+# 换一个业务包（BI_PACKAGE_DIR）就能给另一种业务做一套看板，不用改一行平台代码。
+# 报表 SQL 在 sql/，建表在 schema/，AI 问数的业务口径在 knowledge.md。
+#
+# 数据都是虚构的：连锁门店每天一份销售明细，目标到门店 × 品类 × 月，序时进度到日期 × 品类。
+
+name: retail
+title: 门店销售看板
+subtitle: 连锁门店销售数据看板（虚构示例）
+
+# ---------------------------------------------------------------- 分类
+# 左侧菜单和数据表页面按分类分组，顺序同这里；不写 group 的归第一个分类。
+groups:
+  - {id: sales, title: 销售报表}
+  - {id: staff, title: 人员报表}
+
+# ---------------------------------------------------------------- 数据表
+# date_col：按日期分区的列（导入时按日期覆盖）；没有日期的维表整表覆盖。
+# date_from_filename：文件里没有日期列时，日期取自文件名里的 YYYYMMDD。
+# split_sums：文件里没有、导入时计算的列 = 另一列按 sep 拆开的各个数相加（如「1200.50|330.00」→ 1530.50）。
+# derived：文件里没有、写入后用 SQL 计算的列；sql 是这一行（别名 src）的表达式，可以查别的表。
+#          depends_on 里的表变动后整表重算。
+# header_aliases：Excel 表头 -> 列名（表头和列注释不一致时）。
+# value_rules：导入时对文本列的清洗，步骤依次执行：
+#   rename: {旧值: 新值} / strip_suffixes: [后缀, ...]（去掉第一个匹配的后缀） / ensure_suffix: 后缀
+# editable：可以在「数据表」页面逐行新增、修改、删除（适合不常变的维表和每月一份的目标表）。
+#   keys：确定一行的列，任意两行不能全部相同；required：不能为空的列，默认同 keys。
+tables:
+  - name: bi_sales_detail              # 销售明细：每天一份
+    date_col: sale_date
+    value_rules:
+      category:
+        description: 去掉「（试销）」后缀，「女装-上装」这类写法统一成标准品类名
+        steps:
+          - strip_suffixes: [（试销）]
+          - rename: {女装-上装: 女装上装, 女装-下装: 女装下装, 男装-上装: 男装上装, 男装-下装: 男装下装}
+    split_sums:
+      amount_total: {of: order_amount, sep: "|"}   # 销售额加总：一单多笔金额相加
+    derived:
+      gross_profit:                                # 毛利额 = 销售额 × 毛利率（查毛利率表，品类先过对照表）
+        sql: sql/gross_profit.sql
+        depends_on: [bi_margin_rate, bi_category_map]
+
+  - name: bi_store_daily               # 销售日汇总：导入明细时自动生成，不能直接导入
+    date_col: sale_date
+    summary_of: bi_sales_detail
+
+  - name: bi_category_map              # 品类对照表：原始品类 → 标准品类、品类大类
+    editable:
+      keys: [raw_category]
+      required: [raw_category, category, category_group]
+
+  - name: bi_store_target              # 门店月度目标：月 × 门店 × 品类 → 目标销售额
+    date_col: month_date
+    editable:
+      keys: [date, store_name, category]
+      required: [date, store_name, category, target_amount]
+
+  - name: bi_timeline_target           # 序时目标：日期 × 品类 → 当天应完成的进度
+    date_col: target_date
+
+  - name: bi_store_staff               # 人员表：工号 → 姓名、大区、门店、组别
+    editable:
+      keys: [staff_no]
+      required: [staff_no, staff_name]
+
+  - name: bi_store_headcount           # 门店人力：月 × 门店 × 品类 → 人力（分摊，各品类相加 = 门店总人力）
+    date_col: month_date
+
+  - name: bi_margin_rate               # 毛利率表：标准品类 → 毛利率
+    editable:
+      keys: [category]
+      required: [category, margin_rate]
+
+  - name: bi_member_profile            # 会员表：会员号 → 首购月、等级（明细里没有的客群由它算出来）
+    editable:
+      keys: [member_no]
+
+# ---------------------------------------------------------------- 汇总表
+# 导入 source 时，在同一事务里按日期重算 table：按 keys 分组，count(*) 写入 count_as，sums 逐列求和。
+# computed：这些 key 不取明细原值，而用 SQL 文件里的表达式计算（明细表别名 src）。
+# depends_on：表达式按月引用的表；导入这些表时，重算同月份的汇总。
+summaries:
+  - table: bi_store_daily
+    source: bi_sales_detail
+    date_col: sale_date
+    keys: [sale_date, region, city, store_name, staff_no, staff_name, category, channel, customer_type]
+    count_as: orders
+    sums: [amount_total, return_amount, quantity, gross_profit]
+    computed:
+      customer_type: sql/customer_type.sql
+    depends_on: [bi_member_profile]
+
+# ---------------------------------------------------------------- 列格式
+# 报表列按名字判断显示格式，规则从上到下第一个匹配的生效；都不匹配的是文本。
+# 格式：amount（金额，两位小数）、pct（比例显示为百分比）、count（数量）、text。
+column_formats:
+  - {format: text, ends_with: [排名], equals: [前一名门店, 前前一名门店]}
+  - {format: count, contains: [订单数, 件数, 人力]}
+  - {format: pct, contains: [率, 占比, 环比]}
+  - {format: amount, contains: [额, 金额, 差距]}
+
+# ---------------------------------------------------------------- 报表
+# 菜单按这里的顺序显示（同一分类内）。
+# type: sql（默认）——一段 SQL 出表；ratios 声明比率列的分子分母，合计和分组统计时用 sum(分子)/sum(分母) 重算。
+# type: summary——由另一张 SQL 报表按维度汇总出的若干张表，口径与合计行相同。
+reports:
+  - id: store-overview
+    title: 大盘销售
+    description: 来源：bi_store_daily，关联品类对照表、门店月度目标、序时目标
+    group: sales
+    sql: sql/store_overview.sql
+    dates_sql: select distinct sale_date from bi_store_daily order by 1 desc
+    dims: [日期, 品类, 品类大类, 大区]
+    ratios:
+      累计达成率: [销售额, 目标销售额]
+      序时达成率: [销售额, 序时目标金额]
+      毛利率: [毛利额, 销售额]
+      退货率: [退货额, 销售额]
+      同期销售额环比: {num: 销售额, den: 上月同期销售额, minus_one: true}
+    kpis: [销售额, 累计达成率, 序时达成率, 序时缺口, 毛利率]
+    group_by: 品类大类
+    stage_dim: 品类          # 分组统计里多一列「品类数」
+    charts:
+      - title: 当日概况
+        by: [品类大类, 品类, 大区]
+        metrics: [销售额, 序时达成率, 序时缺口, 毛利率]
+    trend:
+      recovered: 销售额
+      timeline_target: 序时目标金额
+      full_target: 目标销售额
+      last_period: 上月同期销售额
+      rates: [累计达成率, 序时达成率]
+      kpis: [销售额, 累计达成率, 序时达成率, 序时缺口, 同期销售额环比]
+      table: [销售额, 当日新增, 序时目标金额, 序时缺口, 目标销售额, 累计达成率, 序时达成率,
+              上月同期销售额, 同期销售额环比, 毛利额, 毛利率]
+
+  - id: store-detail
+    title: 门店明细
+    description: 来源：bi_store_daily，关联品类对照表、门店月度目标、序时目标、门店人力
+    group: sales
+    sql: sql/store_detail.sql
+    dates_sql: select distinct sale_date from bi_store_daily order by 1 desc
+    dims: [日期, 品类, 品类大类, 大区, 门店]
+    ratios:
+      累计达成率: [销售额, 目标销售额]
+      序时达成率: [销售额, 序时目标金额]
+      毛利率: [毛利额, 销售额]
+      退货率: [退货额, 销售额]
+      人均销售额: [销售额, 人力]
+      人均件数: [件数, 人力]
+      新客占比: [新客销售额, 销售额]
+    kpis: [销售额, 目标销售额, 累计达成率, 序时达成率, 人均销售额]
+    group_by: 品类大类
+    stage_dim: 品类          # 分组统计里多一列「品类数」
+    pivots:
+      - {title: 按品类统计, keys: [品类, 大区]}
+      - {title: 按大区统计, keys: [大区]}
+      - {title: 按大区 × 门店统计, keys: [大区, 门店], merge: 1}
+    column_groups: [新客, 老客]
+    base_group: 全部
+    benchmarks:
+      - {avg: 大区平均达成率, flag: 是否超过大区平均, rate: 累计达成率}
+    charts:
+      - title: 当日概况
+        by: [品类大类, 大区, 门店]
+        metrics: [销售额, 累计达成率, 序时缺口, 人均销售额]
+
+  - id: staff
+    title: 导购表
+    description: 来源：bi_store_daily，口径同门店明细，细分到导购
+    group: staff
+    sql: sql/staff.sql
+    dates_sql: select distinct sale_date from bi_store_daily order by 1 desc
+    dims: [日期, 品类, 品类大类, 大区, 门店, 导购]
+    ratios:
+      毛利率: [毛利额, 销售额]
+      客单价: [销售额, 订单数]
+      退货率: [退货额, 销售额]
+      新客占比: [新客销售额, 销售额]
+    kpis: [销售额, 毛利额, 毛利率, 客单价, 新客占比]
+    group_by: 门店
+    stage_dim: 品类          # 分组统计里多一列「品类数」
+    pivots:
+      - {title: 按导购统计, keys: [门店, 导购]}
+      - {title: 按门店统计, keys: [门店]}
+    benchmarks:
+      - {avg: 门店平均销售额, flag: 是否超过门店平均, rate: 销售额}
+
+  - id: ranking
+    title: 门店排名
+    description: 来源：bi_store_daily，关联门店月度目标；同一 日期 + 品类 + 大区 里各门店的达成率排名与追赶金额
+    group: sales
+    sql: sql/ranking.sql
+    dates_sql: select distinct sale_date from bi_store_daily order by 1 desc
+    dims: [日期, 品类, 品类大类, 大区, 门店]
+    ratios:
+      累计达成率: [销售额, 目标销售额]
+    kpis: [销售额, 累计达成率]
+    group_by: 大区
+    stage_dim: 品类          # 分组统计里多一列「品类数」
+    charts:
+      - title: 当日概况
+        by: [大区, 品类, 门店]
+        metrics: [销售额, 累计达成率, 距离目标差额, 距离前一名差距]
+    choices:
+      - title: 看哪部分门店
+        options:
+          - {label: 全部门店}
+          - {label: 只看未达成, filter: {是否达成目标: [否]}}
+          - {label: 只看达成, filter: {是否达成目标: [是]}}
+
+  - id: store-summary
+    type: summary
+    title: 门店汇总
+    description: 由门店明细按门店 / 大区汇总
+    group: sales
+    source: store-detail
+    note: >-
+      口径：比率一律按 sum(分子)/sum(分母) 重算（达成率不是把各门店的达成率平均）；序时缺口 = 序时目标金额 − 销售额，
+      正数表示还差多少；人均类只统计有人力的门店。
+    tables:
+      - title: 门店汇总
+        group_by: 门店
+        sort: -销售额
+        chart:
+          title: 门店概况
+          metrics: [销售额, {col: 累计达成率, label: 累计达成率}, 序时缺口, {col: 人均销售额, label: 人均销售额}]
+        columns:
+          - {name: 人力, sum: 人力}
+          - {name: 销售额, sum: 销售额}
+          - {name: 目标销售额, sum: 目标销售额}
+          - {name: 累计达成率, ratio: [销售额, 目标销售额]}
+          - {name: "截止{day}号序时目标", sum: 序时目标金额}
+          - {name: 序时达成率, ratio: [销售额, 序时目标金额]}
+          - {name: 序时缺口, diff: [序时目标金额, 销售额]}
+          - {name: 人均销售额, ratio: [销售额, 人力]}
+          - {name: 毛利额, sum: 毛利额}
+          - {name: 毛利率, ratio: [毛利额, 销售额]}
+          - {name: 新客销售额, sum: 新客销售额}
+          - {name: 退货率, ratio: [退货额, 销售额]}
+      - title: 大区汇总
+        group_by: 大区
+        sort: -销售额
+        chart:
+          title: 大区概况
+          metrics: [销售额, 累计达成率, 序时达成率, 毛利率]
+        columns:
+          - {name: 人力, sum: 人力}
+          - {name: 销售额, sum: 销售额}
+          - {name: 目标销售额, sum: 目标销售额}
+          - {name: 累计达成率, ratio: [销售额, 目标销售额]}
+          - {name: 序时达成率, ratio: [销售额, 序时目标金额]}
+          - {name: 序时缺口, diff: [序时目标金额, 销售额]}
+          - {name: 毛利额, sum: 毛利额}
+          - {name: 毛利率, ratio: [毛利额, 销售额]}
+          - {name: 新客占比, ratio: [新客销售额, 销售额]}
+
+# ---------------------------------------------------------------- AI 问数
+chat:
+  knowledge: knowledge.md
+  style: chat_style.md        # 默认的角色和回答风格；管理员可以在「问数设置」页面修改
+  # AI 写 SQL 和查询接口用的只读账号看不到这些列（setup 按这里授权）
+  hidden_columns:
+    bi_sales_detail: [member_no]
+  # 对话框为空时给出的示例问题；按当前页面的报表 id 取，没有就用 default。
+  examples:
+    default: [今天销售额和累计达成率是多少？, 累计达成率最低的三个门店是哪些？, 毛利额最高的品类是哪个？]
+    store-overview: [今天大盘的累计达成率和序时达成率是多少？, 哪个品类的序时缺口最大？]
+    store-detail: [哪个门店累计达成率最低？为什么？, 人均销售额最高的三个门店？]
+    ranking: [哪个门店离前一名还差多少？, 今天有几个门店达成了目标？]
+    staff: [销售额最高的 5 个导购是谁？, 哪个导购的新客占比最高？]
+    store-summary: [哪个大区的累计达成率最低？, 门店之间人均销售额差多少？]

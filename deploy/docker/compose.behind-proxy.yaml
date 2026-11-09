@@ -1,0 +1,9 @@
+# 服务器上已有 nginx（宝塔等）占着 80/443 时：不启动自带的 caddy，app 只在本机端口上监听，由已有的 nginx 反向代理。
+#   docker compose -f compose.yaml -f deploy/docker/compose.behind-proxy.yaml up -d --build
+# .env 里仍要填 DOMAIN（compose.yaml 会校验它），APP_PORT 默认 8100；nginx 配置见 deploy/docker/nginx-behind-proxy.conf。
+services:
+  caddy:
+    profiles: ["bundled-proxy"]
+  app:
+    ports:
+      - "127.0.0.1:${APP_PORT:-8100}:8000"

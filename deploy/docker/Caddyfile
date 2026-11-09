@@ -1,0 +1,8 @@
+# HTTPS for $DOMAIN (certificate requested and renewed automatically), proxied to the app.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8000 {
+		# AI 问数 streams its answer; pass every chunk on immediately.
+		flush_interval -1
+	}
+}

@@ -1,0 +1,67 @@
+# 私有部署：docker compose up -d
+# 配置在同目录的 .env（从 deploy/docker/.env.example 复制），说明见 deploy/docker/README.md。
+name: bi
+
+services:
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.4.3}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 里设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-bi_data}
+      MYSQL_USER: ${DB_USER:-bi}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?请在 .env 里设置 DB_PASSWORD}
+      TZ: Asia/Shanghai
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  app:
+    build:
+      context: .
+      args:
+        PIP_INDEX: ${PIP_INDEX:-https://pypi.org/simple}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    image: ${APP_IMAGE:-bi-app:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-bi_data}
+      DB_USER: ${DB_USER:-bi}
+      # setup creates the read-only account for AI SQL with this account
+      DB_ADMIN_USER: ${DB_ADMIN_USER:-root}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD:-${MYSQL_ROOT_PASSWORD}}
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - app-data:/data
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.8.4-alpine}
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:?请在 .env 里设置 DOMAIN（访问域名，自动申请 HTTPS 证书）}
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  mysql-data:
+  app-data:
+  caddy-data:
+  caddy-config:
